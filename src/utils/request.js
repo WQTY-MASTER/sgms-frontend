@@ -9,18 +9,18 @@ const resolveBaseURL = () => {
         if (envBaseURL && envBaseURL.startsWith('/')) {
             return envBaseURL;
         }
-        return '/api';
+        return '/api'; // 开发环境配合vue.config.js代理转发到后端8080
     }
-    return envBaseURL || '/api';
+    return envBaseURL || '/api'; // 生产环境优先使用环境变量
 };
 
 // 创建axios实例（修复重复baseURL配置）
 const request = axios.create({
-    baseURL: resolveBaseURL(), // 优先使用动态解析的根路径
+    baseURL: resolveBaseURL(), // 仅保留动态解析的根路径
     timeout: 5000
 });
 
-// 请求拦截器
+// 请求拦截器：添加Token + 统一请求头
 request.interceptors.request.use(
     (config) => {
         const token = localStorage.getItem('token');
@@ -37,7 +37,7 @@ request.interceptors.request.use(
     }
 );
 
-// 响应拦截器优化（核心修改：兼容无code的成绩接口 + 登录接口）
+// 响应拦截器优化（兼容无code的成绩接口 + 登录/通用接口）
 request.interceptors.response.use(
     (res) => {
         // 1. 兼容成绩接口返回的{total, list}格式（无code）
@@ -48,7 +48,7 @@ request.interceptors.response.use(
         if (res.data?.code === 200) {
             return res.data.data || res.data; // 成功时返回业务数据
         } else if (res.data?.code) {
-            // 业务码非200时提示错误
+            // 业务码非200时提示错误并拒绝Promise
             ElMessage.error(res.data.msg || '操作失败');
             return Promise.reject(res.data);
         }
@@ -56,7 +56,7 @@ request.interceptors.response.use(
         return res.data || res;
     },
     (error) => {
-        // 401未授权：清空信息并跳转登录
+        // 401未授权：清空用户信息并跳转登录
         if (error.response?.status === 401) {
             ElMessage.error('登录已过期，请重新登录');
             localStorage.removeItem('token');
@@ -76,7 +76,7 @@ request.interceptors.response.use(
         else if (error.response?.status === 404) {
             ElMessage.error('请求的接口不存在');
         }
-        // 其他错误
+        // 其他错误：轻量提示 + 打印详细日志
         else {
             console.error('服务器错误：', error);
             ElMessage.warning('操作异常，请稍后重试');
@@ -85,4 +85,5 @@ request.interceptors.response.use(
     }
 );
 
+// 删除重复的导出语句，仅保留一份
 export default request;

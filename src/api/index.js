@@ -15,7 +15,7 @@ const resolveBaseURL = () => {
 
 // 创建axios实例（修复重复baseURL配置）
 const service = axios.create({
-    baseURL: resolveBaseURL(), // 优先使用动态解析的根路径
+    baseURL: resolveBaseURL(), // 优先使用动态解析的根路径，删除重复配置
     timeout: 5000
 });
 
@@ -40,12 +40,12 @@ service.interceptors.request.use(
 // 响应拦截器：处理错误和添加详细调试日志
 service.interceptors.response.use(
     (res) => {
-        // 业务码非200时提示错误并拒绝Promise
+        // 补全成功响应逻辑：业务码非200时提示错误
         if (res.data.code !== 200) {
             ElMessage.error(res.data.msg || '请求失败');
             return Promise.reject(res.data);
         }
-        // 打印成功响应日志
+        // 打印成功响应日志（可选）
         console.log('=== 响应信息 ===');
         console.log('响应状态:', res.status);
         console.log('响应数据:', res.data);
@@ -59,26 +59,23 @@ service.interceptors.response.use(
         console.log('响应数据:', error.response?.data);
         console.log('请求头:', error.config?.headers);
 
-        // 401未授权：清空Token并跳转登录
         if (error.response?.status === 401) {
             ElMessage.error('登录已过期，请重新登录');
             localStorage.removeItem('token');
             window.location.href = '/login';
-        }
-        // 403无权限：打印详细日志并提示
-        else if (error.response?.status === 403) {
+        } else if (error.response?.status === 403) {
             ElMessage.error('没有权限访问');
+            // 添加更详细的403错误信息
             console.log('=== 403错误详细信息 ===');
             console.log('请求配置:', error.config);
             console.log('响应头:', error.response?.headers);
             console.log('服务器返回:', error.response?.data);
-        }
-        // 其他错误：通用提示
-        else {
+        } else {
             ElMessage.error('服务器错误');
         }
         return Promise.reject(error);
     }
 );
 
+// 删除重复的导出语句，仅保留一份
 export default service;

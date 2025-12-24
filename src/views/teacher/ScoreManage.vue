@@ -11,7 +11,6 @@
             @change="onCourseChange"
             :disabled="loading"
         >
-          <!-- 修复重复label + 兼容后端多字段返回 -->
           <el-option
               v-for="course in courseList"
               :key="course.id"
@@ -20,6 +19,7 @@
           ></el-option>
         </el-select>
       </el-form-item>
+
       <el-form-item label="学生">
         <el-select
             v-model="scoreForm.studentId"
@@ -34,6 +34,8 @@
           ></el-option>
         </el-select>
       </el-form-item>
+
+      <!-- 修正：el-input 正确写法 -->
       <el-form-item label="分数">
         <el-input
             v-model.number="scoreForm.score"
@@ -44,6 +46,7 @@
             max="100"
         />
       </el-form-item>
+
       <el-form-item label="考试时间">
         <el-date-picker
             v-model="scoreForm.examTime"
@@ -54,6 +57,7 @@
             :disabled="loading"
         />
       </el-form-item>
+
       <el-form-item>
         <el-button
             type="primary"
@@ -73,7 +77,7 @@
       </el-form-item>
     </el-form>
 
-    <!-- 成绩列表 -->
+    <!-- 成绩列表展示 -->
     <el-table
         :data="scoreList"
         border
@@ -279,24 +283,23 @@ const saveScore = async () => {
   }
 };
 
-// 编辑成绩 - 回显数据（修复时间格式、ID保留）
+// 编辑成绩 - 回显数据
 const editScore = (row) => {
   console.log('编辑成绩，回显数据:', row);
-  // 深拷贝避免修改原数据，确保时间格式正确
+  // 深拷贝避免修改原数据
   scoreForm.value = {
     id: row.id,
     courseId: row.courseId,
     studentId: row.studentId,
     score: row.score,
-    examTime: row.examTime // 确保是YYYY-MM-DD格式
+    examTime: row.examTime
   };
 };
 
-// 删除成绩 - 增加确认弹窗
+// 删除成绩 - 确认弹窗
 const deleteScore = async (id) => {
   if (!id) return;
   try {
-    // 确认弹窗
     await ElMessageBox.confirm(
         '确定要删除该条成绩吗？删除后无法恢复！',
         '删除确认',
@@ -310,9 +313,8 @@ const deleteScore = async (id) => {
     loading.value = true;
     await deleteScoreApi(id);
     ElMessage.success('成绩删除成功');
-    await fetchScores(); // 刷新列表
+    await fetchScores();
   } catch (err) {
-    // 取消删除时不提示错误
     if (err !== 'cancel') {
       console.error('删除成绩失败:', err);
       ElMessage.error('删除失败：' + (err.message || '服务器异常'));
@@ -322,7 +324,7 @@ const deleteScore = async (id) => {
   }
 };
 
-// 重置表单（保留当前课程选择）
+// 重置表单
 const resetForm = () => {
   const currentCourseId = scoreForm.value.courseId;
   scoreForm.value = {
@@ -356,7 +358,7 @@ h2 {
   border-radius: 8px;
 }
 
-/* 不及格分数样式 */
+/* 不及格分数标红 */
 .score-fail {
   color: #ef4444;
   font-weight: 500;

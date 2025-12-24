@@ -1,8 +1,9 @@
 const { defineConfig } = require('@vue/cli-service')
 module.exports = defineConfig({
   transpileDependencies: true,
-  // 新增devServer代理配置：解决前端/api请求转发到后端8080端口（跨域问题）
+  // 开发服务器配置：解决跨域 + 自定义前端端口
   devServer: {
+    port: 8081, // 新增：前端运行端口（避免与后端8080冲突）
     proxy: {
       '/api': {
         target: 'http://localhost:8080', // 后端服务根地址
