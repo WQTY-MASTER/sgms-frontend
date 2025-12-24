@@ -362,7 +362,7 @@ h2 {
   font-weight: 500;
 }
 
-/* 表格样式优化（整合Codex修改） */
+/* 表格样式优化 */
 :deep(.el-table) {
   --el-table-header-text-color: #4b5563;
   --el-table-row-hover-bg-color: #f3f4f6;

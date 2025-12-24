@@ -2,8 +2,21 @@
 import axios from 'axios';
 import { ElMessage } from 'element-plus';
 
+// 动态解析接口根路径（区分开发/生产环境）
+const resolveBaseURL = () => {
+    const envBaseURL = process.env.VUE_APP_API_BASE_URL;
+    if (process.env.NODE_ENV === 'development') {
+        if (envBaseURL && envBaseURL.startsWith('/')) {
+            return envBaseURL;
+        }
+        return '/api';
+    }
+    return envBaseURL || '/api';
+};
+
+// 创建axios实例（修复重复baseURL配置）
 const request = axios.create({
-    baseURL: 'http://localhost:8080/api',
+    baseURL: resolveBaseURL(), // 优先使用动态解析的根路径
     timeout: 5000
 });
 
@@ -29,40 +42,43 @@ request.interceptors.response.use(
     (res) => {
         // 1. 兼容成绩接口返回的{total, list}格式（无code）
         if (res.data && typeof res.data === 'object' && ('total' in res.data || 'list' in res.data)) {
-            return res.data;
+            return res.data; // 直接返回成绩接口的原始数据
         }
-        // 2. 兼容登录/注册接口（可能直接返回token/role，无code）
-        if (res.data && typeof res.data === 'object' && (res.data.token || res.data.role)) {
-            return res.data;
+        // 2. 兼容登录/通用接口的code格式
+        if (res.data?.code === 200) {
+            return res.data.data || res.data; // 成功时返回业务数据
+        } else if (res.data?.code) {
+            // 业务码非200时提示错误
+            ElMessage.error(res.data.msg || '操作失败');
+            return Promise.reject(res.data);
         }
-        // 3. 处理有code的常规接口（如教师课程接口）
-        if (res.data && typeof res.data === 'object' && 'code' in res.data) {
-            if (res.data.code !== 200) {
-                ElMessage.error(res.data.msg || '操作失败');
-                return Promise.reject(res.data);
-            }
-            return res.data;
-        }
-        // 4. 非JSON响应直接返回
+        // 3. 兜底：无特殊格式时返回原始数据
         return res.data || res;
     },
     (error) => {
+        // 401未授权：清空信息并跳转登录
         if (error.response?.status === 401) {
             ElMessage.error('登录已过期，请重新登录');
-            // 清空所有存储的用户信息
             localStorage.removeItem('token');
             localStorage.removeItem('role');
             localStorage.removeItem('userInfo');
             window.location.href = '/login';
-        } else if (error.response?.status === 403) {
+        }
+        // 403无权限
+        else if (error.response?.status === 403) {
             ElMessage.error('没有权限访问该页面');
-        } else if (error.message.includes('timeout')) {
+        }
+        // 请求超时
+        else if (error.message.includes('timeout')) {
             ElMessage.error('请求超时，请检查网络后重试');
-        } else if (error.response?.status === 404) {
+        }
+        // 404接口不存在
+        else if (error.response?.status === 404) {
             ElMessage.error('请求的接口不存在');
-        } else {
+        }
+        // 其他错误
+        else {
             console.error('服务器错误：', error);
-            // 仅在非401/403/404/超时场景，轻量提示
             ElMessage.warning('操作异常，请稍后重试');
         }
         return Promise.reject(error);

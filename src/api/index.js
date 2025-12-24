@@ -1,9 +1,21 @@
 import axios from 'axios';
 import { ElMessage } from 'element-plus';
 
+// 动态解析接口根路径（区分开发/生产环境）
+const resolveBaseURL = () => {
+    const envBaseURL = process.env.VUE_APP_API_BASE_URL;
+    if (process.env.NODE_ENV === 'development') {
+        if (envBaseURL && envBaseURL.startsWith('/')) {
+            return envBaseURL;
+        }
+        return '/api';
+    }
+    return envBaseURL || '/api';
+};
+
+// 创建axios实例（修复重复baseURL配置）
 const service = axios.create({
-    // 优先使用环境变量，未配置则默认/api（修复重复baseURL问题）
-    baseURL: process.env.VUE_APP_API_BASE_URL || 'http://localhost:8080/api',
+    baseURL: resolveBaseURL(), // 优先使用动态解析的根路径
     timeout: 5000
 });
 
@@ -28,12 +40,12 @@ service.interceptors.request.use(
 // 响应拦截器：处理错误和添加详细调试日志
 service.interceptors.response.use(
     (res) => {
+        // 业务码非200时提示错误并拒绝Promise
         if (res.data.code !== 200) {
-            // 非200业务码统一提示（保留原逻辑）
             ElMessage.error(res.data.msg || '请求失败');
             return Promise.reject(res.data);
         }
-        // 打印响应日志（补充成功响应日志）
+        // 打印成功响应日志
         console.log('=== 响应信息 ===');
         console.log('响应状态:', res.status);
         console.log('响应数据:', res.data);
@@ -47,18 +59,22 @@ service.interceptors.response.use(
         console.log('响应数据:', error.response?.data);
         console.log('请求头:', error.config?.headers);
 
+        // 401未授权：清空Token并跳转登录
         if (error.response?.status === 401) {
             ElMessage.error('登录已过期，请重新登录');
             localStorage.removeItem('token');
             window.location.href = '/login';
-        } else if (error.response?.status === 403) {
+        }
+        // 403无权限：打印详细日志并提示
+        else if (error.response?.status === 403) {
             ElMessage.error('没有权限访问');
-            // 添加更详细的403错误信息
             console.log('=== 403错误详细信息 ===');
             console.log('请求配置:', error.config);
             console.log('响应头:', error.response?.headers);
             console.log('服务器返回:', error.response?.data);
-        } else {
+        }
+        // 其他错误：通用提示
+        else {
             ElMessage.error('服务器错误');
         }
         return Promise.reject(error);
