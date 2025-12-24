@@ -2,7 +2,8 @@ import axios from 'axios';
 import { ElMessage } from 'element-plus';
 
 const service = axios.create({
-    baseURL: 'http://localhost:8080/api', // 后端接口根路径
+    // 优先使用环境变量，未配置则默认/api（修复重复baseURL问题）
+    baseURL: process.env.VUE_APP_API_BASE_URL || 'http://localhost:8080/api',
     timeout: 5000
 });
 
@@ -28,10 +29,15 @@ service.interceptors.request.use(
 service.interceptors.response.use(
     (res) => {
         if (res.data.code !== 200) {
-            ElMessage.error(res.data.msg || '操作失败');
+            // 非200业务码统一提示（保留原逻辑）
+            ElMessage.error(res.data.msg || '请求失败');
             return Promise.reject(res.data);
         }
-        return res.data;
+        // 打印响应日志（补充成功响应日志）
+        console.log('=== 响应信息 ===');
+        console.log('响应状态:', res.status);
+        console.log('响应数据:', res.data);
+        return res;
     },
     (error) => {
         console.log('=== 错误响应信息 ===');
@@ -40,7 +46,7 @@ service.interceptors.response.use(
         console.log('响应状态:', error.response?.status);
         console.log('响应数据:', error.response?.data);
         console.log('请求头:', error.config?.headers);
-        
+
         if (error.response?.status === 401) {
             ElMessage.error('登录已过期，请重新登录');
             localStorage.removeItem('token');

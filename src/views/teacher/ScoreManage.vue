@@ -11,7 +11,7 @@
             @change="onCourseChange"
             :disabled="loading"
         >
-          <!-- 整合Codex修改：兼容后端多字段返回（courseName/label/name/text） -->
+          <!-- 修复重复label + 兼容后端多字段返回 -->
           <el-option
               v-for="course in courseList"
               :key="course.id"
