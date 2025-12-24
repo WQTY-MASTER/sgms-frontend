@@ -11,10 +11,11 @@
             @change="onCourseChange"
             :disabled="loading"
         >
+          <!-- 整合Codex修改：兼容后端多字段返回（courseName/label/name/text） -->
           <el-option
               v-for="course in courseList"
               :key="course.id"
-              :label="course.name"
+              :label="course.courseName || course.label || course.name || course.text"
               :value="course.id"
           ></el-option>
         </el-select>
@@ -361,7 +362,7 @@ h2 {
   font-weight: 500;
 }
 
-/* 表格样式优化 */
+/* 表格样式优化（整合Codex修改） */
 :deep(.el-table) {
   --el-table-header-text-color: #4b5563;
   --el-table-row-hover-bg-color: #f3f4f6;
