@@ -1,0 +1,129 @@
+import { createRouter, createWebHistory } from 'vue-router'
+import { ElMessage } from 'element-plus' // 添加这行导入
+// 引入组件（确保文件存在）
+import Login from '@/views/Login.vue'
+import StudentDashboard from '@/views/student/Dashboard.vue'
+import StudentScore from '@/views/student/Score.vue'
+import TeacherDashboard from '@/views/teacher/Dashboard.vue'
+import ScoreManage from '@/views/teacher/ScoreManage.vue'
+import FileUpload from '@/views/teacher/FileUpload.vue'
+import Statistic from '@/views/teacher/Statistic.vue'
+import NotFound from '@/views/NotFound.vue' // 直接引入404组件（避免懒加载报错）
+
+const routes = [
+  {
+    path: '/',
+    redirect: '/login'
+  },
+  {
+    path: '/login',
+    name: 'Login',
+    component: Login,
+    meta: {
+      requireAuth: false
+    }
+  },
+  // 学生相关路由
+  {
+    path: '/student/dashboard',
+    name: 'StudentDashboard',
+    component: StudentDashboard,
+    meta: {
+      requireAuth: true,
+      role: 'student'
+    }
+  },
+  {
+    path: '/student/score',
+    name: 'StudentScore',
+    component: StudentScore,
+    meta: {
+      requireAuth: true,
+      role: 'student'
+    }
+  },
+  // 教师相关路由
+  {
+    path: '/teacher/dashboard',
+    name: 'TeacherDashboard',
+    component: TeacherDashboard,
+    meta: {
+      requireAuth: true,
+      role: 'teacher'
+    }
+  },
+  {
+    path: '/teacher/score-manage',
+    name: 'ScoreManage',
+    component: ScoreManage,
+    meta: {
+      requireAuth: true,
+      role: 'teacher'
+    }
+  },
+  {
+    path: '/teacher/file-upload',
+    name: 'FileUpload',
+    component: FileUpload,
+    meta: {
+      requireAuth: true,
+      role: 'teacher'
+    }
+  },
+  {
+    path: '/teacher/statistic',
+    name: 'Statistic',
+    component: Statistic,
+    meta: {
+      requireAuth: true,
+      role: 'teacher'
+    }
+  },
+  // 404路由
+  {
+    path: '/:pathMatch(.*)*',
+    name: 'NotFound',
+    component: NotFound
+  }
+]
+
+const router = createRouter({
+  history: createWebHistory(process.env.BASE_URL),
+  routes
+})
+
+// 路由守卫：控制权限
+router.beforeEach((to, from, next) => {
+  // 🌟 优化：兼容多种存储方式，增加容错
+  let userInfo = JSON.parse(localStorage.getItem('userInfo') || '{}');
+  let { token, role } = userInfo;
+  // 若userInfo中无数据，从单独的存储中取
+  if (!token) token = localStorage.getItem('token');
+  if (!role) role = localStorage.getItem('role');
+
+  // 1. 不需要登录的页面直接放行
+  if (!to.meta.requireAuth) {
+    next();
+    return;
+  }
+
+  // 2. 需要登录但未登录：跳转登录页
+  if (!token) {
+    ElMessage.warning('请先登录'); // 增加提示（需引入ElMessage）
+    next('/login');
+    return;
+  }
+
+  // 3. 已登录但角色不匹配：跳转自己的首页
+  if (to.meta.role && to.meta.role !== role) {
+    const target = role === 'student' ? '/student/dashboard' : '/teacher/dashboard';
+    ElMessage.warning('无权限访问该页面，已为您跳转首页');
+    next(target);
+    return;
+  }
+
+  // 4. 所有校验通过：放行
+  next();
+});
+
+export default router
