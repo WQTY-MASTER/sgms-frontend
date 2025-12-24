@@ -9,9 +9,9 @@ const resolveBaseURL = () => {
         if (envBaseURL && envBaseURL.startsWith('/')) {
             return envBaseURL;
         }
-        return '/api'; // 开发环境配合vue.config.js代理转发到后端8080
+        return '/api';
     }
-    return envBaseURL || '/api'; // 生产环境优先使用环境变量
+    return envBaseURL || '/api';
 };
 
 // 创建axios实例（修复重复baseURL配置）
