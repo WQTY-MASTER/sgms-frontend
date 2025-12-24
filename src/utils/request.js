@@ -2,22 +2,11 @@
 import axios from 'axios';
 import { ElMessage } from 'element-plus';
 
-// 动态解析接口根路径（区分开发/生产环境）
-const resolveBaseURL = () => {
-    const envBaseURL = process.env.VUE_APP_API_BASE_URL;
-    if (process.env.NODE_ENV === 'development') {
-        if (envBaseURL && envBaseURL.startsWith('/')) {
-            return envBaseURL;
-        }
-        return '/api';
-    }
-    return envBaseURL || '/api';
-};
-
-// 创建axios实例（修复重复baseURL配置）
+// 创建axios实例（固定前端8082，后端8080）
 const request = axios.create({
-    baseURL: resolveBaseURL(), // 仅保留动态解析的根路径
-    timeout: 5000
+    baseURL: 'http://localhost:8080/api', // 直接指向后端接口根路径，避免动态解析问题
+    timeout: 10000, // 延长超时时间
+    withCredentials: true // 允许携带Cookie（适配CORS）
 });
 
 // 请求拦截器：添加Token + 统一请求头
@@ -25,65 +14,49 @@ request.interceptors.request.use(
     (config) => {
         const token = localStorage.getItem('token');
         if (token) {
-            config.headers.Authorization = `Bearer ${token}`;
+            config.headers.Authorization = `Bearer ${token}`; // 严格匹配后端tokenPrefix
         }
-        // 统一请求头，避免后端解析异常
         config.headers['Content-Type'] = 'application/json;charset=utf-8';
         return config;
     },
     (error) => {
-        console.error('请求参数错误：', error);
+        console.error('请求拦截器错误：', error);
+        ElMessage.error('请求参数异常，请检查');
         return Promise.reject(error);
     }
 );
 
-// 响应拦截器优化（兼容无code的成绩接口 + 登录/通用接口）
+// 响应拦截器：严格匹配后端Result格式
 request.interceptors.response.use(
     (res) => {
-        // 1. 兼容成绩接口返回的{total, list}格式（无code）
-        if (res.data && typeof res.data === 'object' && ('total' in res.data || 'list' in res.data)) {
-            return res.data; // 直接返回成绩接口的原始数据
+        // 后端统一返回 {code, msg, data}
+        const { code, msg, data } = res.data;
+        if (code === 200) {
+            return data; // 成功时直接返回业务数据（token/role等）
+        } else {
+            ElMessage.error(msg || '操作失败');
+            return Promise.reject(new Error(msg));
         }
-        // 2. 兼容登录/通用接口的code格式
-        if (res.data?.code === 200) {
-            return res.data.data || res.data; // 成功时返回业务数据
-        } else if (res.data?.code) {
-            // 业务码非200时提示错误并拒绝Promise
-            ElMessage.error(res.data.msg || '操作失败');
-            return Promise.reject(res.data);
-        }
-        // 3. 兜底：无特殊格式时返回原始数据
-        return res.data || res;
     },
     (error) => {
-        // 401未授权：清空用户信息并跳转登录
+        // 401未授权：清空缓存并跳转登录
         if (error.response?.status === 401) {
-            ElMessage.error('登录已过期，请重新登录');
-            localStorage.removeItem('token');
-            localStorage.removeItem('role');
-            localStorage.removeItem('userInfo');
+            ElMessage.error(error.response.data?.msg || '登录已过期，请重新登录');
+            localStorage.clear(); // 清空所有缓存
             window.location.href = '/login';
         }
         // 403无权限
         else if (error.response?.status === 403) {
-            ElMessage.error('没有权限访问该页面');
+            ElMessage.error('您没有权限访问该资源');
         }
-        // 请求超时
-        else if (error.message.includes('timeout')) {
-            ElMessage.error('请求超时，请检查网络后重试');
-        }
-        // 404接口不存在
-        else if (error.response?.status === 404) {
-            ElMessage.error('请求的接口不存在');
-        }
-        // 其他错误：轻量提示 + 打印详细日志
+        // 其他错误
         else {
-            console.error('服务器错误：', error);
-            ElMessage.warning('操作异常，请稍后重试');
+            const errMsg = error.response?.data?.msg || error.message || '服务器异常';
+            ElMessage.error(errMsg);
+            console.error('响应拦截器错误：', error);
         }
         return Promise.reject(error);
     }
 );
 
-// 删除重复的导出语句，仅保留一份
 export default request;
