@@ -15,7 +15,7 @@ const resolveBaseURL = () => {
 
 // 创建axios实例（修复重复baseURL配置）
 const service = axios.create({
-    baseURL: resolveBaseURL(), // 优先使用动态解析的根路径，删除重复配置
+    baseURL: resolveBaseURL(), // 后端接口根路径
     timeout: 5000
 });
 
