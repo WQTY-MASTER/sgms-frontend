@@ -92,14 +92,28 @@ const router = createRouter({
   routes
 })
 
+// 🌟 新增：安全解析userInfo，防止JSON解析报错
+const safeParseUserInfo = () => {
+  try {
+    return JSON.parse(localStorage.getItem('userInfo') || '{}');
+  } catch (error) {
+    console.warn('解析userInfo失败，将重置缓存', error);
+    localStorage.removeItem('userInfo');
+    return {};
+  }
+};
+
 // 路由守卫：控制权限
 router.beforeEach((to, from, next) => {
-  // 🌟 优化：兼容多种存储方式，增加容错
-  let userInfo = JSON.parse(localStorage.getItem('userInfo') || '{}');
+  // 🌟 优化：使用安全解析函数，增加容错
+  let userInfo = safeParseUserInfo();
   let { token, role } = userInfo;
   // 若userInfo中无数据，从单独的存储中取
   if (!token) token = localStorage.getItem('token');
   if (!role) role = localStorage.getItem('role');
+
+  // 🌟 新增：角色统一小写+去空格，避免大小写/空格导致的匹配失败
+  if (role) role = role.toLowerCase().trim();
 
   // 1. 不需要登录的页面直接放行
   if (!to.meta.requireAuth) {
@@ -117,8 +131,13 @@ router.beforeEach((to, from, next) => {
   // 3. 已登录但角色不匹配：跳转自己的首页
   if (to.meta.role && to.meta.role !== role) {
     const target = role === 'student' ? '/student/dashboard' : '/teacher/dashboard';
-    ElMessage.warning('无权限访问该页面，已为您跳转首页');
-    next(target);
+    // 🌟 优化：避免重复跳转提示（仅当目标路径与当前要访问的路径不同时提示）
+    if (to.path !== target) {
+      ElMessage.warning('无权限访问该页面，已为您跳转首页');
+      next(target);
+      return;
+    }
+    next();
     return;
   }
 

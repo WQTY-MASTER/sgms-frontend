@@ -177,11 +177,12 @@ const handleLogin = async () => {
       throw new Error(`无效的角色类型：${rawRole}，仅支持学生/教师`);
     }
 
-    // 存储用户信息
+    // 存储用户信息（统一角色为小写，避免路由守卫误判）
+    const userInfo = { ...resData, role };
     localStorage.setItem('token', token);
     localStorage.setItem('role', role);
     localStorage.setItem('username', username);
-    localStorage.setItem('userInfo', JSON.stringify(resData));
+    localStorage.setItem('userInfo', JSON.stringify(userInfo));
 
     // 跳转对应角色页面
     const targetPath = role === 'student'
