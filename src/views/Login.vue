@@ -51,7 +51,7 @@
         </el-button>
       </el-form>
 
-      <!-- 注册表单 -->
+      <!-- 注册表单（新增姓名输入框+完善验证） -->
       <el-form class="form" v-if="activeTab === 'register'">
         <div class="form-item">
           <label>用户名</label>
@@ -70,6 +70,16 @@
               type="password"
               placeholder="请输入密码"
               show-password
+              clearable
+              maxlength="20"
+          />
+        </div>
+
+        <div class="form-item">
+          <label>姓名</label>
+          <el-input
+              v-model="registerForm.realName"
+              placeholder="请输入姓名"
               clearable
               maxlength="20"
           />
@@ -141,8 +151,13 @@ const router = useRouter();
 
 const loginForm = ref({ username: '', password: '' });
 const registerForm = ref({
-  username: '', password: '', confirmPassword: '', role: 'student',
-  studentId: '', teacherId: ''
+  username: '',
+  password: '',
+  realName: '', // 新增：姓名字段
+  confirmPassword: '',
+  role: 'student',
+  studentId: '',
+  teacherId: ''
 });
 const loginLoading = ref(false);
 const registerLoading = ref(false);
@@ -200,13 +215,14 @@ const handleLogin = async () => {
   }
 };
 
-// 注册逻辑（适配后端格式）
+// 注册逻辑（适配后端格式，新增姓名字段验证）
 const handleRegister = async () => {
-  const { username, password, confirmPassword, role, studentId, teacherId } = registerForm.value;
+  const { username, password, realName, confirmPassword, role, studentId, teacherId } = registerForm.value;
 
-  // 表单验证
+  // 表单验证（新增姓名非空校验）
   if (!username.trim()) return ElMessage.warning('请输入用户名');
   if (!password.trim()) return ElMessage.warning('请输入密码');
+  if (!realName.trim()) return ElMessage.warning('请输入姓名'); // 新增：姓名验证
   if (password.length < 6) return ElMessage.warning('密码长度不能少于6位');
   if (password !== confirmPassword) return ElMessage.warning('两次密码输入不一致');
   if (!role) return ElMessage.warning('请选择角色');
@@ -215,7 +231,8 @@ const handleRegister = async () => {
 
   registerLoading.value = true;
   try {
-    const registerData = { username, password };
+    // 构造注册参数（新增realName字段）
+    const registerData = { username, password, realName };
     if (role === 'student') registerData.studentId = studentId;
     if (role === 'teacher') registerData.teacherId = teacherId;
 
@@ -227,8 +244,13 @@ const handleRegister = async () => {
     // 清空表单
     loginForm.value = { username, password: '' };
     registerForm.value = {
-      username: '', password: '', confirmPassword: '', role: 'student',
-      studentId: '', teacherId: ''
+      username: '',
+      password: '',
+      realName: '',
+      confirmPassword: '',
+      role: 'student',
+      studentId: '',
+      teacherId: ''
     };
   } catch (err) {
     ElMessage.error(err.message || '注册失败，请重试');

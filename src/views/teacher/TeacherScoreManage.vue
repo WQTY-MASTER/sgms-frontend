@@ -2,7 +2,7 @@
   <div class="teacher-score-manage">
     <h2>成绩管理</h2>
 
-    <!-- 成绩录入表单 -->
+    <!-- 成绩录入表单（修复el-form标签闭合+选择器使用） -->
     <el-form :model="scoreForm" inline @submit.prevent="handleSave" label-width="80px">
       <el-form-item label="课程">
         <el-select
@@ -12,8 +12,13 @@
             clearable
             :disabled="isSubmitting"
         >
-          <!-- 修复：课程显示courseName而非name -->
-          <el-option v-for="course in courseList" :key="course.id" :label="course.courseName" :value="course.id" />
+          <!-- 课程选项：修复标签闭合 -->
+          <el-option
+              v-for="course in courseList"
+              :key="course.id"
+              :label="course.courseName"
+              :value="course.id"
+          />
         </el-select>
       </el-form-item>
       <el-form-item label="学生">
@@ -23,9 +28,14 @@
             clearable
             :disabled="isSubmitting"
         >
-          <!-- 修复：学生显示studentName而非name -->
-          <el-option v-for="student in studentList" :key="student.id" :label="student.studentName" :value="student.id" />
-          </el-option>
+          <!-- 学生选项：修复标签闭合 -->
+          <el-option
+              v-for="student in studentList"
+              :key="student.id"
+              :label="student.studentName"
+              :value="student.id"
+          />
+        </el-select>
       </el-form-item>
       <el-form-item label="分数">
         <el-input
@@ -135,8 +145,7 @@
         :total="total"
         style="margin-top: 20px; text-align: right;"
         :disabled="isSubmitting"
-    >
-    </el-pagination>
+    />
   </div>
 </template>
 
@@ -151,7 +160,6 @@ import {
   getTeacherCourses,
   checkScoreUnique
 } from '@/api/score';
-// 替换为teacher.js的接口
 import { getStudentsByCourse } from '@/api/teacher';
 
 // 表单数据
@@ -179,14 +187,13 @@ onMounted(async () => {
     loading.value = true;
     // 获取教师负责的课程
     const courseRes = await getTeacherCourses();
-    if (Array.isArray(courseRes)) {
-      courseList.value = courseRes;
-    } else if (courseRes?.code === 200) {
-      courseList.value = courseRes.data || [];
-    } else {
-      courseList.value = [];
+    courseList.value = courseRes?.code === 200 ? (courseRes.data || []) : (Array.isArray(courseRes) ? courseRes : []);
+    // 自动选中第一个课程
+    if (!scoreForm.value.courseId && courseList.value.length > 0) {
+      scoreForm.value.courseId = Number(courseList.value[0].id);
     }
-    // 获取成绩列表（带分页）
+    // 加载学生和成绩列表
+    await handleCourseChange();
     await fetchScores();
   } catch (error) {
     console.error('页面加载失败:', error);
@@ -201,15 +208,12 @@ const fetchScores = async () => {
   try {
     loading.value = true;
     const res = await getTeacherScores(pageNum.value, pageSize.value, '', scoreForm.value.courseId);
-    if (res?.total !== undefined) {
-      scoreList.value = res.list || res.records || [];
-      total.value = res.total || 0;
-    } else if (res?.code === 200) {
+    if (res?.code === 200) {
       scoreList.value = res.data?.list || res.data?.records || [];
       total.value = res.data?.total || 0;
     } else {
-      scoreList.value = [];
-      total.value = 0;
+      scoreList.value = res?.list || res?.records || [];
+      total.value = res?.total || 0;
     }
   } catch (error) {
     console.error('获取成绩列表失败:', error);
@@ -221,7 +225,7 @@ const fetchScores = async () => {
   }
 };
 
-// 选择课程后加载学生（修复接口调用）
+// 选择课程后加载学生
 const handleCourseChange = async () => {
   const courseId = scoreForm.value.courseId;
   if (!courseId || isNaN(Number(courseId))) {
@@ -232,15 +236,8 @@ const handleCourseChange = async () => {
 
   try {
     loading.value = true;
-    // 调用teacher.js的getStudentsByCourse接口
     const studentsRes = await getStudentsByCourse(courseId);
-    if (Array.isArray(studentsRes)) {
-      studentList.value = studentsRes;
-    } else if (studentsRes?.code === 200) {
-      studentList.value = studentsRes.data || [];
-    } else {
-      studentList.value = [];
-    }
+    studentList.value = studentsRes?.code === 200 ? (studentsRes.data || []) : (Array.isArray(studentsRes) ? studentsRes : []);
     scoreForm.value.studentId = '';
   } catch (error) {
     console.error('获取学生列表失败:', error);
@@ -254,8 +251,7 @@ const handleCourseChange = async () => {
 // 成绩唯一性校验
 const checkScoreDuplicate = async () => {
   const { studentId, courseId, id } = scoreForm.value;
-  if (id) return true;
-  if (!studentId || !courseId) return true;
+  if (id || !studentId || !courseId) return true;
 
   try {
     const res = await checkScoreUnique({
@@ -276,25 +272,15 @@ const checkScoreDuplicate = async () => {
 // 保存/修改成绩
 const handleSave = async () => {
   const form = scoreForm.value;
-  if (!form.courseId) {
-    ElMessage.warning('请选择课程');
-    return;
+  // 表单验证
+  if (!form.courseId) return ElMessage.warning('请选择课程');
+  if (!form.studentId) return ElMessage.warning('请选择学生');
+  if (form.score === '' || isNaN(Number(form.score)) || form.score < 0 || form.score > 100) {
+    return ElMessage.warning('请输入有效的分数（0-100）');
   }
-  if (!form.studentId) {
-    ElMessage.warning('请选择学生');
-    return;
-  }
-  if (form.score === '' || isNaN(Number(form.score)) || Number(form.score) < 0 || Number(form.score) > 100) {
-    ElMessage.warning('请输入有效的分数（0-100）');
-    return;
-  }
-  if (!form.examTime) {
-    ElMessage.warning('请选择考试时间');
-    return;
-  }
+  if (!form.examTime) return ElMessage.warning('请选择考试时间');
 
   isSubmitting.value = true;
-
   try {
     const isUnique = await checkScoreDuplicate();
     if (!isUnique) return;
@@ -303,8 +289,7 @@ const handleSave = async () => {
       ...form,
       courseId: Number(form.courseId),
       studentId: Number(form.studentId),
-      score: Number(form.score),
-      examTime: form.examTime
+      score: Number(form.score)
     };
 
     if (form.id) {
@@ -314,7 +299,6 @@ const handleSave = async () => {
       await addScore(submitData);
       ElMessage.success('成绩保存成功');
     }
-
     await fetchScores();
     resetForm();
   } catch (error) {
@@ -332,8 +316,7 @@ const handleEdit = (row) => {
     id: Number(row.id),
     courseId: Number(row.courseId),
     studentId: Number(row.studentId),
-    score: Number(row.score),
-    examTime: row.examTime ? row.examTime : ''
+    score: Number(row.score)
   };
   handleCourseChange();
 };
@@ -352,18 +335,10 @@ const resetForm = () => {
 
 // 单个删除
 const handleDelete = async (id) => {
-  if (!id || isNaN(Number(id))) {
-    ElMessage.warning('无效的成绩ID，删除失败');
-    return;
-  }
+  if (!id || isNaN(Number(id))) return ElMessage.warning('无效的成绩ID');
 
   try {
-    await ElMessageBox.confirm(
-        '确定要删除该成绩吗？删除后无法恢复',
-        '删除确认',
-        { type: 'warning' }
-    );
-
+    await ElMessageBox.confirm('确定要删除该成绩吗？删除后无法恢复', '删除确认', { type: 'warning' });
     isSubmitting.value = true;
     await deleteScore(id);
     ElMessage.success('成绩删除成功');
@@ -380,10 +355,7 @@ const handleDelete = async (id) => {
 
 // 批量删除
 const handleBatchDelete = async () => {
-  if (selectedScores.value.length === 0) {
-    ElMessage.warning('请选择要删除的成绩');
-    return;
-  }
+  if (selectedScores.value.length === 0) return ElMessage.warning('请选择要删除的成绩');
 
   try {
     await ElMessageBox.confirm(
@@ -391,18 +363,15 @@ const handleBatchDelete = async () => {
         '批量删除确认',
         { type: 'warning' }
     );
-
     isSubmitting.value = true;
-    const deletePromises = selectedScores.value.map(item => deleteScore(item.id));
-    await Promise.all(deletePromises);
-
+    await Promise.all(selectedScores.value.map(item => deleteScore(item.id)));
     ElMessage.success(`成功删除 ${selectedScores.value.length} 条成绩`);
     await fetchScores();
     selectedScores.value = [];
   } catch (error) {
     if (error !== 'cancel') {
-      console.error('批量删除成绩失败:', error);
-      ElMessage.error(`批量删除失败：${error.msg || '部分成绩删除失败，请重试'}`);
+      console.error('批量删除失败:', error);
+      ElMessage.error(`批量删除失败：${error.msg || '部分成绩删除失败'}`);
     }
   } finally {
     isSubmitting.value = false;
