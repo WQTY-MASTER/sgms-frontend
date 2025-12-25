@@ -187,14 +187,24 @@ onMounted(async () => {
     loading.value = true;
     // 获取教师负责的课程
     const courseRes = await getTeacherCourses();
-    courseList.value = courseRes?.code === 200 ? (courseRes.data || []) : (Array.isArray(courseRes) ? courseRes : []);
-    // 自动选中第一个课程
+    if (Array.isArray(courseRes)) {
+      courseList.value = courseRes;
+    } else if (courseRes?.code === 200) {
+      courseList.value = courseRes.data || [];
+    } else {
+      courseList.value = [];
+    }
+    // 获取成绩列表（带分页）
+    await fetchScores();
     if (!scoreForm.value.courseId && courseList.value.length > 0) {
       scoreForm.value.courseId = Number(courseList.value[0].id);
     }
-    // 加载学生和成绩列表
-    await handleCourseChange();
-    await fetchScores();
+    if (scoreForm.value.courseId) {
+      await handleCourseChange();
+    } else {
+      // 获取成绩列表（带分页）
+      await fetchScores();
+    }
   } catch (error) {
     console.error('页面加载失败:', error);
     ElMessage.error(`页面加载失败：${error.msg || '服务器异常'}`);
@@ -208,12 +218,15 @@ const fetchScores = async () => {
   try {
     loading.value = true;
     const res = await getTeacherScores(pageNum.value, pageSize.value, '', scoreForm.value.courseId);
-    if (res?.code === 200) {
+    if (res?.total !== undefined) {
+      scoreList.value = res.list || res.records || [];
+      total.value = res.total || 0;
+    } else if (res?.code === 200) {
       scoreList.value = res.data?.list || res.data?.records || [];
       total.value = res.data?.total || 0;
     } else {
-      scoreList.value = res?.list || res?.records || [];
-      total.value = res?.total || 0;
+      scoreList.value = [];
+      total.value = 0;
     }
   } catch (error) {
     console.error('获取成绩列表失败:', error);
@@ -225,20 +238,29 @@ const fetchScores = async () => {
   }
 };
 
-// 选择课程后加载学生
+// 选择课程后加载学生（修复接口调用 + 新增fetchScores刷新列表）
 const handleCourseChange = async () => {
   const courseId = scoreForm.value.courseId;
   if (!courseId || isNaN(Number(courseId))) {
     studentList.value = [];
     scoreForm.value.studentId = '';
+    await fetchScores();
     return;
   }
 
   try {
     loading.value = true;
+    // 调用teacher.js的getStudentsByCourse接口
     const studentsRes = await getStudentsByCourse(courseId);
-    studentList.value = studentsRes?.code === 200 ? (studentsRes.data || []) : (Array.isArray(studentsRes) ? studentsRes : []);
+    if (Array.isArray(studentsRes)) {
+      studentList.value = studentsRes;
+    } else if (studentsRes?.code === 200) {
+      studentList.value = studentsRes.data || [];
+    } else {
+      studentList.value = [];
+    }
     scoreForm.value.studentId = '';
+    await fetchScores();
   } catch (error) {
     console.error('获取学生列表失败:', error);
     ElMessage.error(`获取学生列表失败：${error.msg || '服务器异常'}`);
@@ -251,7 +273,8 @@ const handleCourseChange = async () => {
 // 成绩唯一性校验
 const checkScoreDuplicate = async () => {
   const { studentId, courseId, id } = scoreForm.value;
-  if (id || !studentId || !courseId) return true;
+  if (id) return true;
+  if (!studentId || !courseId) return true;
 
   try {
     const res = await checkScoreUnique({

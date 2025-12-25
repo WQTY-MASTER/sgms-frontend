@@ -215,24 +215,27 @@ const handleLogin = async () => {
   }
 };
 
-// 注册逻辑（适配后端格式，新增姓名字段验证）
+// 注册逻辑（适配后端格式，新增姓名字段验证 + 密码trim处理）
 const handleRegister = async () => {
   const { username, password, realName, confirmPassword, role, studentId, teacherId } = registerForm.value;
+  // 核心修改：密码trim处理，解决隐藏空格导致的比对问题
+  const normalizedPassword = password.trim();
+  const normalizedConfirmPassword = confirmPassword.trim();
 
-  // 表单验证（新增姓名非空校验）
+  // 表单验证（优化为trim后的值校验）
   if (!username.trim()) return ElMessage.warning('请输入用户名');
-  if (!password.trim()) return ElMessage.warning('请输入密码');
+  if (!normalizedPassword) return ElMessage.warning('请输入密码');
   if (!realName.trim()) return ElMessage.warning('请输入姓名'); // 新增：姓名验证
-  if (password.length < 6) return ElMessage.warning('密码长度不能少于6位');
-  if (password !== confirmPassword) return ElMessage.warning('两次密码输入不一致');
+  if (normalizedPassword.length < 6) return ElMessage.warning('密码长度不能少于6位');
+  if (normalizedPassword !== normalizedConfirmPassword) return ElMessage.warning('两次密码输入不一致');
   if (!role) return ElMessage.warning('请选择角色');
   if (role === 'student' && !studentId.trim()) return ElMessage.warning('请输入学号');
   if (role === 'teacher' && !teacherId.trim()) return ElMessage.warning('请输入教师编号');
 
   registerLoading.value = true;
   try {
-    // 构造注册参数（新增realName字段）
-    const registerData = { username, password, realName };
+    // 构造注册参数（使用trim后的密码，避免存储空格）
+    const registerData = { username, password: normalizedPassword, realName };
     if (role === 'student') registerData.studentId = studentId;
     if (role === 'teacher') registerData.teacherId = teacherId;
 
@@ -242,7 +245,7 @@ const handleRegister = async () => {
     ElMessage.success('注册成功！请使用新账号登录');
     activeTab.value = 'login';
     // 清空表单
-    loginForm.value = { username, password: '' };
+    loginForm.value = { username: '', password: '' };
     registerForm.value = {
       username: '',
       password: '',
