@@ -25,6 +25,7 @@
             v-model="scoreForm.studentId"
             placeholder="选择学生"
             :disabled="loading || !courseList.length"
+            @change="onStudentChange"
         >
           <el-option
               v-for="student in studentList"
@@ -77,7 +78,24 @@
       </el-form-item>
     </el-form>
 
-    <!-- 成绩列表展示（修改数据源为筛选后的列表） -->
+    <!-- 新增：学生姓名搜索表单 -->
+    <el-form :model="searchForm" inline @submit.prevent class="score-filter">
+      <el-form-item label="学生姓名">
+        <el-input
+            v-model="searchForm.studentName"
+            placeholder="输入学生姓名搜索"
+            clearable
+            :disabled="loading || !courseList.length"
+            @keyup.enter="handleSearch"
+        />
+      </el-form-item>
+      <el-form-item>
+        <el-button type="primary" :disabled="loading" @click="handleSearch">搜索</el-button>
+        <el-button :disabled="loading" @click="handleReset">重置</el-button>
+      </el-form-item>
+    </el-form>
+
+    <!-- 成绩列表展示（筛选后列表 + 分页） -->
     <el-table
         :data="filteredScoreList"
         border
@@ -102,11 +120,25 @@
         </template>
       </el-table-column>
     </el-table>
+
+    <!-- 新增：分页组件 -->
+    <div class="score-pagination">
+      <el-pagination
+          background
+          layout="total, sizes, prev, pager, next, jumper"
+          :current-page="pagination.pageNum"
+          :page-size="pagination.pageSize"
+          :page-sizes="[10, 20, 50, 100]"
+          :total="pagination.total"
+          @current-change="handlePageChange"
+          @size-change="handleSizeChange"
+      />
+    </div>
   </div>
 </template>
 
 <script setup>
-// 新增引入computed
+// 引入必要依赖
 import { ref, computed, onMounted } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { getTeacherScores, addScore, updateScore, deleteScore as deleteScoreApi, getTeacherCourses } from '@/api/score';
@@ -114,7 +146,7 @@ import { getTeacherScores, addScore, updateScore, deleteScore as deleteScoreApi,
 // 加载状态（全局防抖）
 const loading = ref(false);
 
-// 表单数据 - 严格类型定义
+// 表单数据 - 新增搜索表单、完善类型定义
 const scoreForm = ref({
   id: null,          // 编辑时的成绩ID
   courseId: null,    // 课程ID（Number）
@@ -122,13 +154,21 @@ const scoreForm = ref({
   score: null,       // 分数（Number，初始为null避免空字符串）
   examTime: ''       // 考试时间（String，YYYY-MM-DD）
 });
+const searchForm = ref({
+  studentName: ''    // 学生姓名搜索关键词
+});
 
-// 列表数据
+// 列表数据 - 新增分页配置
 const scoreList = ref([]);
 const courseList = ref([]);
 const studentList = ref([]);
+const pagination = ref({
+  pageNum: 1,        // 当前页码
+  pageSize: 10,      // 每页条数
+  total: 0           // 总条数
+});
 
-// 新增：按选中学生筛选成绩列表（计算属性）
+// 按选中学生筛选成绩列表（计算属性）
 const filteredScoreList = computed(() => {
   const selectedStudentId = scoreForm.value.studentId;
   if (!selectedStudentId) {
@@ -169,12 +209,12 @@ const fetchCourses = async () => {
   }
 };
 
-// 课程切换 - 优化loading判断 + 重置studentId
+// 课程切换 - 优化逻辑：重置搜索、分页、学生选择
 const onCourseChange = async () => {
-  // 移除loading.value判断，仅校验courseId是否存在
   if (!scoreForm.value.courseId) {
     studentList.value = [];
     scoreList.value = [];
+    pagination.value.total = 0;
     return;
   }
 
@@ -182,21 +222,17 @@ const onCourseChange = async () => {
   try {
     const courseId = scoreForm.value.courseId;
     console.log('课程切换，加载课程ID:', courseId, '的成绩数据');
-    // 新增：切换课程时清空选中的学生
+    // 切换课程时重置搜索、分页、学生选择
     scoreForm.value.studentId = '';
+    searchForm.value.studentName = '';
+    pagination.value.pageNum = 1;
 
-    // 调用成绩接口（兼容分页参数）
-    const res = await getTeacherScores(1, 100, '', courseId); // 每页100条，减少分页问题
-    // 兼容后端分页结构：list 或 records（MyBatis-Plus 分页默认records）
-    const scoreData = res.data?.list || res.data?.records || res.list || res.records || [];
-    console.log('成绩数据加载完成:', scoreData);
-
-    // 更新成绩列表
-    scoreList.value = scoreData;
+    // 先调用分页版fetchScores加载数据
+    await fetchScores({ keepLoading: true });
 
     // 提取唯一学生列表（去重）
     const studentMap = new Map();
-    scoreData.forEach(item => {
+    scoreList.value.forEach(item => {
       if (item.studentId && item.studentName) {
         studentMap.set(item.studentId, {
           id: item.studentId,
@@ -212,20 +248,27 @@ const onCourseChange = async () => {
     ElMessage.error('获取学生和成绩失败：' + (err.message || '网络异常'));
     studentList.value = [];
     scoreList.value = [];
+    pagination.value.total = 0;
   } finally {
     loading.value = false;
   }
 };
 
-// 刷新成绩列表（独立封装）
-const fetchScores = async () => {
-  if (loading.value || !scoreForm.value.courseId) return;
-  loading.value = true;
+// 刷新成绩列表 - 优化：支持分页、搜索参数，新增keepLoading控制
+const fetchScores = async ({ keepLoading = false } = {}) => {
+  if (!scoreForm.value.courseId) return;
+  if (!keepLoading) {
+    loading.value = true;
+  }
   try {
     const courseId = scoreForm.value.courseId;
-    const res = await getTeacherScores(1, 100, '', courseId);
-    const scoreData = res.data?.list || res.data?.records || [];
+    const { pageNum, pageSize } = pagination.value;
+    // 传递分页、搜索参数给接口
+    const res = await getTeacherScores(pageNum, pageSize, searchForm.value.studentName, courseId);
+    const scoreData = res.data?.list || res.data?.records || res.list || res.records || [];
     scoreList.value = scoreData;
+    // 兼容后端分页返回的总条数
+    pagination.value.total = res.data?.total ?? res.total ?? scoreData.length;
 
     // 同步更新学生列表（防止新增成绩后学生列表缺失）
     const studentMap = new Map();
@@ -240,8 +283,42 @@ const fetchScores = async () => {
     console.error('刷新成绩列表失败:', err);
     ElMessage.error('刷新成绩失败：' + (err.message || '网络异常'));
   } finally {
-    loading.value = false;
+    if (!keepLoading) {
+      loading.value = false;
+    }
   }
+};
+
+// 新增：搜索事件处理
+const handleSearch = async () => {
+  pagination.value.pageNum = 1; // 搜索时重置页码到第一页
+  await fetchScores();
+};
+
+// 新增：重置搜索条件
+const handleReset = async () => {
+  searchForm.value.studentName = '';
+  scoreForm.value.studentId = '';
+  pagination.value.pageNum = 1;
+  await fetchScores();
+};
+
+// 新增：学生选择切换时重置页码
+const onStudentChange = () => {
+  pagination.value.pageNum = 1;
+};
+
+// 新增：分页页码切换
+const handlePageChange = async (page) => {
+  pagination.value.pageNum = page;
+  await fetchScores();
+};
+
+// 新增：分页条数切换
+const handleSizeChange = async (size) => {
+  pagination.value.pageSize = size;
+  pagination.value.pageNum = 1; // 切换条数时重置页码
+  await fetchScores();
 };
 
 // 保存/更新成绩
@@ -371,6 +448,18 @@ h2 {
   padding: 16px;
   background: #f9fafb;
   border-radius: 8px;
+}
+
+/* 新增：搜索表单样式 */
+.score-filter {
+  margin-bottom: 12px;
+}
+
+/* 新增：分页组件样式 */
+.score-pagination {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 16px;
 }
 
 /* 不及格分数标红 */
