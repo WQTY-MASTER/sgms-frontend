@@ -78,7 +78,7 @@
       </el-form-item>
     </el-form>
 
-    <!-- 新增：学生姓名搜索表单 -->
+    <!-- 学生姓名搜索表单 -->
     <el-form :model="searchForm" inline @submit.prevent class="score-filter">
       <el-form-item label="学生姓名">
         <el-input
@@ -95,7 +95,7 @@
       </el-form-item>
     </el-form>
 
-    <!-- 成绩列表展示（筛选后列表 + 分页） -->
+    <!-- 成绩列表展示 -->
     <el-table
         :data="filteredScoreList"
         border
@@ -121,7 +121,7 @@
       </el-table-column>
     </el-table>
 
-    <!-- 新增：分页组件 -->
+    <!-- 分页组件 -->
     <div class="score-pagination">
       <el-pagination
           background
@@ -146,7 +146,7 @@ import { getTeacherScores, addScore, updateScore, deleteScore as deleteScoreApi,
 // 加载状态（全局防抖）
 const loading = ref(false);
 
-// 表单数据 - 新增搜索表单、完善类型定义
+// 表单数据 - 包含成绩录入和搜索表单
 const scoreForm = ref({
   id: null,          // 编辑时的成绩ID
   courseId: null,    // 课程ID（Number）
@@ -158,7 +158,7 @@ const searchForm = ref({
   studentName: ''    // 学生姓名搜索关键词
 });
 
-// 列表数据 - 新增分页配置
+// 列表数据 + 分页配置
 const scoreList = ref([]);
 const courseList = ref([]);
 const studentList = ref([]);
@@ -179,9 +179,9 @@ const filteredScoreList = computed(() => {
   );
 });
 
-// 页面初始化
+// 页面初始化：优先加载课程列表
 onMounted(async () => {
-  await fetchCourses(); // 优先加载课程列表
+  await fetchCourses();
 });
 
 // 获取教师课程列表（独立封装）
@@ -189,16 +189,14 @@ const fetchCourses = async () => {
   if (loading.value) return;
   loading.value = true;
   try {
-    console.log('开始获取教师课程列表');
     const res = await getTeacherCourses();
     // 兼容后端返回格式：res.data 或直接返回数组
     courseList.value = res.data || res || [];
-    console.log('课程列表加载完成:', courseList.value);
 
-    // 默认选中第一个课程
+    // 默认选中第一个课程并加载对应数据
     if (courseList.value.length > 0) {
       scoreForm.value.courseId = courseList.value[0].id;
-      await onCourseChange(); // 加载对应学生和成绩
+      await onCourseChange();
     }
   } catch (err) {
     console.error('获取课程列表失败:', err);
@@ -209,7 +207,7 @@ const fetchCourses = async () => {
   }
 };
 
-// 课程切换 - 优化逻辑：重置搜索、分页、学生选择
+// 课程切换：重置状态 + 加载对应成绩/学生数据
 const onCourseChange = async () => {
   if (!scoreForm.value.courseId) {
     studentList.value = [];
@@ -220,14 +218,12 @@ const onCourseChange = async () => {
 
   loading.value = true;
   try {
-    const courseId = scoreForm.value.courseId;
-    console.log('课程切换，加载课程ID:', courseId, '的成绩数据');
     // 切换课程时重置搜索、分页、学生选择
     scoreForm.value.studentId = '';
     searchForm.value.studentName = '';
     pagination.value.pageNum = 1;
 
-    // 先调用分页版fetchScores加载数据
+    // 调用分页版fetchScores加载数据
     await fetchScores({ keepLoading: true });
 
     // 提取唯一学生列表（去重）
@@ -241,8 +237,6 @@ const onCourseChange = async () => {
       }
     });
     studentList.value = Array.from(studentMap.values());
-    console.log('学生列表提取完成:', studentList.value);
-
   } catch (err) {
     console.error('加载课程数据失败:', err);
     ElMessage.error('获取学生和成绩失败：' + (err.message || '网络异常'));
@@ -254,23 +248,25 @@ const onCourseChange = async () => {
   }
 };
 
-// 刷新成绩列表 - 优化：支持分页、搜索参数，新增keepLoading控制
+// 刷新成绩列表：支持分页、搜索、loading控制
 const fetchScores = async ({ keepLoading = false } = {}) => {
   if (!scoreForm.value.courseId) return;
   if (!keepLoading) {
     loading.value = true;
   }
+
   try {
     const courseId = scoreForm.value.courseId;
     const { pageNum, pageSize } = pagination.value;
-    // 传递分页、搜索参数给接口
+    // 传递分页+搜索参数给接口
     const res = await getTeacherScores(pageNum, pageSize, searchForm.value.studentName, courseId);
+
+    // 兼容后端不同分页返回格式
     const scoreData = res.data?.list || res.data?.records || res.list || res.records || [];
     scoreList.value = scoreData;
-    // 兼容后端分页返回的总条数
     pagination.value.total = res.data?.total ?? res.total ?? scoreData.length;
 
-    // 同步更新学生列表（防止新增成绩后学生列表缺失）
+    // 同步更新学生列表（防止新增成绩后列表缺失）
     const studentMap = new Map();
     scoreData.forEach(item => {
       if (item.studentId && item.studentName) {
@@ -278,7 +274,6 @@ const fetchScores = async ({ keepLoading = false } = {}) => {
       }
     });
     studentList.value = Array.from(studentMap.values());
-
   } catch (err) {
     console.error('刷新成绩列表失败:', err);
     ElMessage.error('刷新成绩失败：' + (err.message || '网络异常'));
@@ -289,13 +284,13 @@ const fetchScores = async ({ keepLoading = false } = {}) => {
   }
 };
 
-// 新增：搜索事件处理
+// 搜索：重置页码 + 刷新列表
 const handleSearch = async () => {
-  pagination.value.pageNum = 1; // 搜索时重置页码到第一页
+  pagination.value.pageNum = 1;
   await fetchScores();
 };
 
-// 新增：重置搜索条件
+// 重置：清空搜索/学生选择 + 重置页码 + 刷新列表
 const handleReset = async () => {
   searchForm.value.studentName = '';
   scoreForm.value.studentId = '';
@@ -303,68 +298,52 @@ const handleReset = async () => {
   await fetchScores();
 };
 
-// 新增：学生选择切换时重置页码
+// 学生选择切换：重置页码
 const onStudentChange = () => {
   pagination.value.pageNum = 1;
 };
 
-// 新增：分页页码切换
+// 分页：页码切换
 const handlePageChange = async (page) => {
   pagination.value.pageNum = page;
   await fetchScores();
 };
 
-// 新增：分页条数切换
+// 分页：条数切换（重置页码）
 const handleSizeChange = async (size) => {
   pagination.value.pageSize = size;
-  pagination.value.pageNum = 1; // 切换条数时重置页码
+  pagination.value.pageNum = 1;
   await fetchScores();
 };
 
 // 保存/更新成绩
 const saveScore = async () => {
   // 基础验证
-  if (!scoreForm.value.courseId) {
-    return ElMessage.warning('请选择课程');
-  }
-  if (!scoreForm.value.studentId) {
-    return ElMessage.warning('请选择学生');
-  }
-  if (scoreForm.value.score === null || scoreForm.value.score === '') {
-    return ElMessage.warning('请输入分数');
-  }
-  // 分数范围验证
-  if (scoreForm.value.score < 0 || scoreForm.value.score > 100) {
-    return ElMessage.warning('分数必须在0-100之间');
-  }
-  if (!scoreForm.value.examTime) {
-    return ElMessage.warning('请选择考试时间');
-  }
+  if (!scoreForm.value.courseId) return ElMessage.warning('请选择课程');
+  if (!scoreForm.value.studentId) return ElMessage.warning('请选择学生');
+  if (scoreForm.value.score === null || scoreForm.value.score === '') return ElMessage.warning('请输入分数');
+  if (scoreForm.value.score < 0 || scoreForm.value.score > 100) return ElMessage.warning('分数必须在0-100之间');
+  if (!scoreForm.value.examTime) return ElMessage.warning('请选择考试时间');
 
-  // 重复录入校验（新增时）
+  // 新增时重复校验
   if (!scoreForm.value.id) {
     const isDuplicate = scoreList.value.some(item =>
         item.courseId === scoreForm.value.courseId &&
         item.studentId === scoreForm.value.studentId &&
         item.examTime === scoreForm.value.examTime
     );
-    if (isDuplicate) {
-      return ElMessage.warning('该学生该课程的该日期成绩已存在，请勿重复录入');
-    }
+    if (isDuplicate) return ElMessage.warning('该学生该课程的该日期成绩已存在，请勿重复录入');
   }
 
   loading.value = true;
   try {
     if (scoreForm.value.id) {
-      // 更新成绩
       await updateScore(scoreForm.value.id, scoreForm.value);
       ElMessage.success('成绩更新成功');
     } else {
-      // 新增成绩
       await addScore(scoreForm.value);
       ElMessage.success('成绩录入成功');
     }
-    // 刷新列表 + 重置表单
     await fetchScores();
     resetForm();
   } catch (err) {
@@ -375,31 +354,19 @@ const saveScore = async () => {
   }
 };
 
-// 编辑成绩 - 回显数据
+// 编辑成绩：回显数据
 const editScore = (row) => {
-  console.log('编辑成绩，回显数据:', row);
-  // 深拷贝避免修改原数据
-  scoreForm.value = {
-    id: row.id,
-    courseId: row.courseId,
-    studentId: row.studentId,
-    score: row.score,
-    examTime: row.examTime
-  };
+  scoreForm.value = { ...row }; // 深拷贝避免修改原数据
 };
 
-// 删除成绩 - 确认弹窗
+// 删除成绩：确认弹窗 + 接口调用
 const deleteScore = async (id) => {
   if (!id) return;
   try {
     await ElMessageBox.confirm(
         '确定要删除该条成绩吗？删除后无法恢复！',
         '删除确认',
-        {
-          confirmButtonText: '确定',
-          cancelButtonText: '取消',
-          type: 'warning'
-        }
+        { confirmButtonText: '确定', cancelButtonText: '取消', type: 'warning' }
     );
 
     loading.value = true;
@@ -416,7 +383,7 @@ const deleteScore = async (id) => {
   }
 };
 
-// 重置表单
+// 重置表单：保留课程选择，清空其他字段
 const resetForm = () => {
   const currentCourseId = scoreForm.value.courseId;
   scoreForm.value = {
@@ -450,12 +417,12 @@ h2 {
   border-radius: 8px;
 }
 
-/* 新增：搜索表单样式 */
+/* 搜索表单样式 */
 .score-filter {
   margin-bottom: 12px;
 }
 
-/* 新增：分页组件样式 */
+/* 分页组件样式 */
 .score-pagination {
   display: flex;
   justify-content: flex-end;
