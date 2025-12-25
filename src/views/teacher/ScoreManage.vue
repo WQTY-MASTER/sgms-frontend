@@ -77,9 +77,9 @@
       </el-form-item>
     </el-form>
 
-    <!-- 成绩列表展示 -->
+    <!-- 成绩列表展示（修改数据源为筛选后的列表） -->
     <el-table
-        :data="scoreList"
+        :data="filteredScoreList"
         border
         style="margin-top: 20px;"
         v-loading="loading"
@@ -106,7 +106,8 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue';
+// 新增引入computed
+import { ref, computed, onMounted } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { getTeacherScores, addScore, updateScore, deleteScore as deleteScoreApi, getTeacherCourses } from '@/api/score';
 
@@ -126,6 +127,17 @@ const scoreForm = ref({
 const scoreList = ref([]);
 const courseList = ref([]);
 const studentList = ref([]);
+
+// 新增：按选中学生筛选成绩列表（计算属性）
+const filteredScoreList = computed(() => {
+  const selectedStudentId = scoreForm.value.studentId;
+  if (!selectedStudentId) {
+    return scoreList.value;
+  }
+  return scoreList.value.filter((item) =>
+      String(item.studentId) === String(selectedStudentId)
+  );
+});
 
 // 页面初始化
 onMounted(async () => {
@@ -157,9 +169,10 @@ const fetchCourses = async () => {
   }
 };
 
-// 课程切换 - 加载对应学生和成绩
+// 课程切换 - 优化loading判断 + 重置studentId
 const onCourseChange = async () => {
-  if (loading.value || !scoreForm.value.courseId) {
+  // 移除loading.value判断，仅校验courseId是否存在
+  if (!scoreForm.value.courseId) {
     studentList.value = [];
     scoreList.value = [];
     return;
@@ -169,6 +182,8 @@ const onCourseChange = async () => {
   try {
     const courseId = scoreForm.value.courseId;
     console.log('课程切换，加载课程ID:', courseId, '的成绩数据');
+    // 新增：切换课程时清空选中的学生
+    scoreForm.value.studentId = '';
 
     // 调用成绩接口（兼容分页参数）
     const res = await getTeacherScores(1, 100, '', courseId); // 每页100条，减少分页问题
