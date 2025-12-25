@@ -26,7 +26,8 @@
             v-model="scoreForm.studentId"
             placeholder="选择学生"
             clearable
-            :disabled="isSubmitting"
+            :disabled="isSubmitting || !scoreForm.courseId"
+            @change="handleStudentChange"
         >
           <!-- 学生选项：修复标签闭合 -->
           <el-option
@@ -196,9 +197,11 @@ onMounted(async () => {
     }
     // 获取成绩列表（带分页）
     await fetchScores();
+
     if (!scoreForm.value.courseId && courseList.value.length > 0) {
       scoreForm.value.courseId = Number(courseList.value[0].id);
     }
+
     if (scoreForm.value.courseId) {
       await handleCourseChange();
     } else {
@@ -213,11 +216,25 @@ onMounted(async () => {
   }
 });
 
-// 获取成绩列表（支持分页）
+// 获取选中学生姓名（新增：用于列表筛选）
+const getSelectedStudentName = () => {
+  const studentId = scoreForm.value.studentId;
+  if (!studentId) return '';
+  const match = studentList.value.find((student) => Number(student.id) === Number(studentId));
+  return match?.studentName || '';
+};
+
+// 获取成绩列表（支持分页 + 新增学生姓名筛选）
 const fetchScores = async () => {
   try {
     loading.value = true;
-    const res = await getTeacherScores(pageNum.value, pageSize.value, '', scoreForm.value.courseId);
+    const studentName = getSelectedStudentName();
+    const res = await getTeacherScores(
+        pageNum.value,
+        pageSize.value,
+        studentName,
+        scoreForm.value.courseId
+    );
     if (res?.total !== undefined) {
       scoreList.value = res.list || res.records || [];
       total.value = res.total || 0;
@@ -268,6 +285,12 @@ const handleCourseChange = async () => {
   } finally {
     loading.value = false;
   }
+};
+
+// 新增：选择学生后刷新成绩列表
+const handleStudentChange = async () => {
+  pageNum.value = 1;
+  await fetchScores();
 };
 
 // 成绩唯一性校验
