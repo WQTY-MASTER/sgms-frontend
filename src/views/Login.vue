@@ -234,8 +234,13 @@ const handleRegister = async () => {
 
   registerLoading.value = true;
   try {
-    // 构造注册参数（使用trim后的密码，避免存储空格）
-    const registerData = { username, password: normalizedPassword, realName };
+    // 构造注册参数（使用trim后的密码，新增confirmPassword字段，避免存储空格）
+    const registerData = {
+      username,
+      password: normalizedPassword,
+      confirmPassword: normalizedConfirmPassword,
+      realName
+    };
     if (role === 'student') registerData.studentId = studentId;
     if (role === 'teacher') registerData.teacherId = teacherId;
 
