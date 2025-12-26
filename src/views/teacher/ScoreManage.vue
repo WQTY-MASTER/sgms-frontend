@@ -1,5 +1,12 @@
 <template>
   <div class="score-manage">
+    <div class="teacher-nav">
+      <el-menu mode="horizontal" :default-active="activeMenu" router>
+        <el-menu-item index="/teacher/score-manage">成绩管理</el-menu-item>
+        <el-menu-item index="/teacher/statistic">成绩统计</el-menu-item>
+        <el-menu-item index="/teacher/file-upload">成绩导入</el-menu-item>
+      </el-menu>
+    </div>
     <h2>成绩管理</h2>
 
     <!-- 成绩录入表单 -->
@@ -140,9 +147,12 @@
 <script setup>
 // 引入必要依赖
 import { ref, computed, onMounted } from 'vue';
+import { useRoute } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { getTeacherScores, addScore, updateScore, deleteScore as deleteScoreApi, getTeacherCourses } from '@/api/score';
 
+const route = useRoute();
+const activeMenu = computed(() => route.path);
 // 加载状态（全局防抖）
 const loading = ref(false);
 
@@ -401,6 +411,9 @@ const resetForm = () => {
   padding: 20px;
   max-width: 1200px;
   margin: 0 auto;
+}
+.teacher-nav {
+  margin-bottom: 16px;
 }
 
 h2 {

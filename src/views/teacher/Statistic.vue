@@ -1,5 +1,12 @@
 <template>
   <div class="score-container">
+    <div class="teacher-nav">
+      <el-menu mode="horizontal" :default-active="activeMenu" router>
+        <el-menu-item index="/teacher/score-manage">成绩管理</el-menu-item>
+        <el-menu-item index="/teacher/statistic">成绩统计</el-menu-item>
+        <el-menu-item index="/teacher/file-upload">成绩导入</el-menu-item>
+      </el-menu>
+    </div>
     <!-- 成绩管理模块 -->
     <div class="score-manage">
       <h2>成绩管理</h2>
@@ -209,6 +216,7 @@
 <script setup>
 // 引入必要依赖
 import { ref, computed, onMounted } from 'vue';
+import { useRoute } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
 // 接口导入：请确保实际项目中接口路径和名称正确
 import {
@@ -216,6 +224,9 @@ import {
   deleteScore as deleteScoreApi, getTeacherCourses
 } from '@/api/score';
 import { getScoreSegment, getScoreStatistic } from '@/api/stat'; // 统计相关接口
+
+const route = useRoute();
+const activeMenu = computed(() => route.path);
 
 // ===================== 基础状态 & 通用变量 =====================
 const loading = ref(false); // 成绩管理加载状态
@@ -568,6 +579,10 @@ onMounted(() => {
   padding: 0 20px;
   max-width: 1200px;
   margin: 0 auto;
+}
+
+.teacher-nav {
+  margin: 16px 0;
 }
 
 /* 成绩管理样式 */
